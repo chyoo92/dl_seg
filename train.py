@@ -25,7 +25,7 @@ parser.add_argument('--batch', action='store', type=int, default=20)
 parser.add_argument('--learningRate', action='store', type=float, default=1e-4)
 parser.add_argument('--randomseed', action='store', type=int, default=12345)
 
-parser = argparse.ArgumentParser('training', parents=[get_args_parser()])
+
 args = parser.parse_args()
 
 dataset_module = dataset_main  #### main dataset code
@@ -63,17 +63,18 @@ dset = Dataset()
 for sampleInfo in config['samples']:
     if 'ignore' in sampleInfo and sampleInfo['ignore']: continue
     name = sampleInfo['name']
-    dset.addSample(sampleInfo['path'], sampleInfo['label'], args.padding)
+    dset.addSample(sampleInfo['path'],device = device)
 dset.initialize() 
 
-
+print(dset,'dset')
+print(len(dset))
 #### split events
 lengths = [int(x*len(dset)) for x in config['training']['splitFractions']]
 lengths.append(len(dset)-sum(lengths))
 torch.manual_seed(config['training']['randomSeed'])
 trnDset, valDset, testDset = torch.utils.data.random_split(dset, lengths)
-print(len(trnDset),len(valDset),len(testDset))
-
+print(len(trnDset),len(valDset),len(testDset),'sadfsdfasf')
+print(trnDset,valDset,testDset,'sadfasfsdf')
 
 
 kwargs = {'batch_size':config['training']['batch'],'num_workers':min(config['training']['nDataLoaders'],os.cpu_count()), 'pin_memory':True}
@@ -87,16 +88,18 @@ model_name = args.model
 
 #### model load
 if args.transfer_learning == 0:
-    model = model_name(fea = args.fea, \
-                    cla = args.cla, \
-                    cross_head = args.cross_head, \
-                    cross_dim = args.cross_dim, \
-                    self_head = args.self_head, \
-                    self_dim = args.self_dim, \
-                    n_layers = args.n_layers, \
-                    num_latents = args.num_latents, \
-                    dropout_ratio = args.dropout_ratio, \
-                    batch = config['training']['batch'], \
+    # model = model_name(fea = args.fea, \
+    #                 cla = args.cla, \
+    #                 cross_head = args.cross_head, \
+    #                 cross_dim = args.cross_dim, \
+    #                 self_head = args.self_head, \
+    #                 self_dim = args.self_dim, \
+    #                 n_layers = args.n_layers, \
+    #                 num_latents = args.num_latents, \
+    #                 dropout_ratio = args.dropout_ratio, \
+    #                 batch = config['training']['batch'], \
+    #                 device = device)
+    model = model_name(batch = config['training']['batch'], \
                     device = device)
 else:
     model = torch.load(result_path+'/model.pth',map_location='cuda')
@@ -140,13 +143,14 @@ for epoch in range(nEpoch):
 
     for i, batch_set in enumerate(tqdm(trnLoader, desc='epoch %d/%d' % (epoch+1, nEpoch))):
         model = model.cuda()
+        data, label, corrs, new_summ = batch_set
 
-        foreground = batch_set['label'].to(device)
-        affs = (1. - batch_set['affinities']).to(device)
+        foreground = label.to(device)
+        affs = (1. - data).to(device)
         target = torch.cat([affs, foreground], dim=1)
         
-        corrs = batch_set['correlations'].to(device)
-        summ = batch_set['summary'].to(device)
+        corrs = corrs.to(device)
+        summ = new_summ.to(device)
         
         if summ.dim() == 3:
             summ = summ.unsqueeze(1)
@@ -183,12 +187,15 @@ for epoch in range(nEpoch):
     with torch.no_grad():
         for i, batch_set in enumerate(tqdm(valLoader)):
 
-            foreground = batch_set['label'].to(device)
-            affs = (1. - batch_set['affinities']).to(device)
+            data, label, corrs, new_summ = batch_set
+
+            foreground = label.to(device)
+            affs = (1. - data).to(device)
             target = torch.cat([affs, foreground], dim=1)
             
-            corrs = batch_set['correlations'].to(device)
-            summ = batch_set['summary'].to(device)
+            corrs = corrs.to(device)
+            summ = new_summ.to(device)
+            
             
             if summ.dim() == 3:
                 summ = summ.unsqueeze(1)

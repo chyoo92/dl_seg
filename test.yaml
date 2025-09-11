@@ -1,0 +1,16 @@
+## Configuration for the training, evaluation
+samples:
+
+  - name: neurofinder
+    path: /home/bio/work/mini_disco/data_neuro/neurofinder.00.00.h5
+
+  - name: neurofinder
+    path: /home/bio/work/mini_disco/data_neuro/neurofinder.00.01.h5
+    
+training:
+    nDataLoaders : 4
+    splitFractions : [0.8, 0.2] ## training set, validation set. (test set is the reminders)
+    epoch : 3
+    batch : 10
+    learningRate : 0.0001
+    randomSeed : 12346
