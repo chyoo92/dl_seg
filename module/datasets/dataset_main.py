@@ -70,8 +70,13 @@ class calciumdataset(Dataset):
     
     
 
-    def addSample(self, fName,device):
+    def addSample(self, fName,device,predict):
 
+        self.sec_length=100
+        self.sec_size=128
+        self.n_secs=10
+        
+        self.predict = predict
         if os.path.isdir(fName):
             fName = os.path.join(fName, "*.h5")
         
@@ -86,7 +91,7 @@ class calciumdataset(Dataset):
 
             with h5py.File(fName) as f:
                 if 'input' not in f: continue
-                event = f['input']
+                event = f['input'].astype(np.int16)
 
             with h5py.File(path+'/'+'BF_labels.h5','r') as f: label = f[name][...]
             with h5py.File(path+'/'+'gt_segmentations.h5','r') as f: seg = f[name][...]
@@ -100,6 +105,9 @@ class calciumdataset(Dataset):
             transform_params = self.get_transform_params(seg)
 
             new_summ = self.transform_summlike(summ, transform_params, norm=True, comp_affs=False)
+            # print(event.shape,'sfasdfasdfasfd')
+            print(event,'asdfasfd')
+            
             corrs = self.transform_video(event, transform_params) 
             
             data = self.transform_summlike(seg, transform_params, norm=False, comp_affs=True)
@@ -173,3 +181,47 @@ class calciumdataset(Dataset):
             summ = self.GA.get_affs(summ).squeeze(0)
 
         return summ
+
+    def transform_video(self,video,transform_params):
+        hflip,vflip,rots,maxpool_size,x_start,x_stop,y_start,y_stop = transform_params
+        sec_length = int(video.shape[0] / self.n_secs) if self.n_secs > 0 else video.shape[0]
+        maxpool = nn.MaxPool3d(kernel_size=(maxpool_size,1,1))
+        
+        if not self.predict:
+            sec_starts = np.random.choice(video.shape[0]-sec_length,self.n_secs) if video.shape[0]>sec_length else [0]*self.n_secs
+        else:
+            sec_starts = np.arange(int(video.shape[0]/sec_length)) * sec_length if sec_length > 0 else [0]
+        
+        corrs = []
+        video_crop = video[:, x_start:x_stop, y_start:y_stop]
+
+        for start_frame in sec_starts:
+            end_frame = min(start_frame + sec_length, video.shape[0])
+            video_sec = video_crop[start_frame:end_frame, :, :]
+
+            if video_sec.size == 0: continue
+            video_resized = torch.tensor(video_sec.astype(np.float32),dtype=self.dtype,device=self.device)
+            
+            if video_resized.numel() == 0: continue
+            if video_resized.size(0) < maxpool_size: continue
+
+            video_resized = maxpool(video_resized.view(1,1,video_resized.size(0),video_resized.size(1),video_resized.size(2)))[0,0]
+            
+            if vflip: video_resized = video_resized.flip(1)
+            if hflip: video_resized = video_resized.flip(2)
+            if rots == 1: video_resized = video_resized.transpose(1,2).flip(1)
+            if rots == 2: video_resized = video_resized.flip(1).flip(2)
+            if rots == 3: video_resized = video_resized.transpose(1,2).flip(2)
+                
+            corrs.append(self.get_corrs(video_resized))
+        
+        if not corrs:
+             h = x_stop - x_start
+             w = y_stop - y_start
+             return torch.zeros((self.n_secs, 15, h, w), dtype=self.dtype, device=self.device)
+
+        corrs = torch.stack(corrs)
+        stds = torch.std(corrs)
+        if stds > 0: corrs = (corrs - torch.mean(corrs)) / stds
+        
+        return corrs

@@ -3,6 +3,7 @@ output: test
 device: 0
 transfer_learning: 0
 model: disco_origin
+predict: None
 nDataLoaders: 4
 epoch: 3000
 batch: 20

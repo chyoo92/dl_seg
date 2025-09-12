@@ -17,6 +17,7 @@ parser.add_argument('--device', action='store', type=int, default=None) #### gpu
 parser.add_argument('--transfer_learning', action='store', type=int, default=0) #### 0 first training / bigger than 1 transfer learning
 
 parser.add_argument('--model', action='store',type=str)
+parser.add_argument('--predict', action='store',type=int, default=None)
 
 #### training parameter
 parser.add_argument('--nDataLoaders', action='store', type=int, default=4)
@@ -63,7 +64,7 @@ dset = Dataset()
 for sampleInfo in config['samples']:
     if 'ignore' in sampleInfo and sampleInfo['ignore']: continue
     name = sampleInfo['name']
-    dset.addSample(sampleInfo['path'],device = device)
+    dset.addSample(sampleInfo['path'],device = device, predict=args.predict)
 dset.initialize() 
 
 print(dset,'dset')
